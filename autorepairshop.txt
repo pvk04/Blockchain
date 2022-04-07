@@ -10,7 +10,6 @@ contract Autorepairshop {
     }
 
     struct Request {
-        address owner;
         uint carId;
         string color;
         bool status;
@@ -19,8 +18,8 @@ contract Autorepairshop {
     }
 
     mapping(address => Car[]) cars;
-    Request[] requests;
-    
+    mapping(address => Request[]) requests;
+
 
     address admin;
     constructor() {
@@ -33,31 +32,30 @@ contract Autorepairshop {
     }
 
     function createRequire (uint carId, string memory color) public {
-        requests.push(Request(msg.sender, carId, color, true, 0, false));
+        requests[msg.sender].push(Request(carId, color, true, 0, false));
     }
 
-    function masterCarRating (uint requestId, uint price) public {
+    function masterCarRating (address owner, uint requestId, uint price) public {
         require(msg.sender == admin, "You dont have permission!");
-        require(requests[requestId].price == 0, "This car has already been rated.");
-        requests[requestId].price = price;
+        require(requests[owner][requestId].price == 0, "This car has already been rated.");
+        requests[owner][requestId].price = price;
     }
 
     function customerConfirmation (uint requestId) public payable {
-        require(msg.value == requests[requestId].price, "You don't have enough money");
-        require(msg.sender == requests[requestId].owner, "You did not make this request");
-        requests[requestId].confirmStatus = true;
+        require(msg.value == requests[msg.sender][requestId].price, "You don't have enough money");
+        requests[msg.sender][requestId].confirmStatus = true;
     }
 
-    function masterCarRecolor (uint requestId) public {
+    function masterCarRecolor (address owner, uint requestId) public {
         require(msg.sender == admin, "You dont have permission!");
-        require(requests[requestId].confirmStatus = true, "The customer did not confirm this operation.");
-        require(requests[requestId].status == true, "This request has already been completed.");
-        cars[requests[requestId].owner][requests[requestId].carId].color = requests[requestId].color;
-        requests[requestId].status = false;
+        require(requests[owner][requestId].confirmStatus = true, "The customer did not confirm this operation.");
+        require(requests[owner][requestId].status == true, "This request has already been completed.");
+        cars[owner][requests[owner][requestId].carId].color = requests[owner][requestId].color;
+        requests[owner][requestId].status = false;
     }
 
-    function showRequests () public view returns (Request[] memory) {
-        return requests;
+    function showRequests (address owner) public view returns (Request[] memory) {
+        return requests[owner];
     }
 
     function showCars (address owner) public view returns(Car[] memory) {
