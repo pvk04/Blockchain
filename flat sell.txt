@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.7.0 <0.9.0;
+
+contract flatSell {
+
+  address admin;
+  address owner1;
+
+  struct Flat{
+    uint square;
+    uint term;
+    bool own;
+  } 
+
+  struct Sell{
+    address owner;
+    uint flatId;
+    uint price;
+    uint sellTerm;
+    bool sellStatus; // активно ли объявление
+    address buyer; // если есть покупатель, то другой человек не может кинуть запрос на покупку квартиры. Покупка будет по принципу кто первее кинет запрос.
+  }
+
+  mapping(address => Flat[]) flats;
+  Sell[] sellRequests;
+
+  constructor(){
+    admin = msg.sender;
+    owner1 = 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2;
+    flats[owner1].push(Flat(50, block.timestamp+36000, true));
+  }
+
+
+  function addFlat (address owner, uint square) public{
+    require(msg.sender == admin, "You dont have permission");
+    require(square != 0, "Flat square cant be 0");
+    flats[owner].push(Flat(square, block.timestamp + 36000, true));
+  }
+
+  function addSellRequest(uint flatId, uint price) public{
+    require(flats[msg.sender].length > flatId, "Flat doesnt exist");
+    require(price > 0, "Price must be greater than 0");
+    sellRequests.push(Sell(msg.sender, flatId, price, block.timestamp + 3600, false,  address(0)));
+  }
+
+  function cancelSellRequest(uint requestId) public{
+    require(sellRequests[requestId].owner == msg.sender, "Its not your request");
+    require(sellRequests[requestId].sellStatus == false, "Request already completed");
+    require(sellRequests[requestId].sellTerm <= block.timestamp, "Request already expired");
+    sellRequests[requestId].sellStatus = true;
+  }
+
+  function buyRequest(uint flatId) public payable {
+    require(msg.value == sellRequests[flatId].price, "You dont have enough money");
+    require(msg.sender != sellRequests[flatId].owner, "You cant buy your flat");
+    require(sellRequests[flatId].sellStatus == false, "Flat already selled");
+    require(sellRequests[flatId].buyer != address(0), "That request already have a buyer");
+    require(sellRequests[flatId].sellTerm <= block.timestamp, "This request has expired");
+    sellRequests[flatId].buyer = msg.sender;
+  }
+
+  function ownerConfirm(uint requestId) public{
+    require(msg.sender == sellRequests[requestId].owner, "You dont own this flat");
+    require(sellRequests[requestId].sellStatus == false, "Flat already selled");
+    require(sellRequests[requestId].buyer != address(0), "That request dont have buyer");
+    if (sellRequests[requestId].sellTerm > block.timestamp){
+        payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price); // если время действия объявления вышло и потом владелец соглашается, то сделка отмениться и деньги вернуться покупателю
+    }
+    else{
+        payable(sellRequests[requestId].owner).transfer(sellRequests[requestId].price);
+        // удалить у владельца квартиру и передать её покупателю
+        // address oldOwner = sellRequests[requestId].owner;
+        // address newOwner = sellRequests[requestId].buyer;
+        // uint square = flats[oldOwner][sellRequests[requestId].flatId].square;
+        // uint term =  flats[oldOwner][sellRequests[requestId].flatId].term;
+        // flats[newOwner].push(Flat(square, term, true));
+        flats[sellRequests[requestId].buyer].push(Flat(flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].square, flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].term, true));
+
+        flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].own = false;  
+
+        sellRequests[requestId].sellStatus = true;
+    }
+  }
+
+  function showFlats(address owner) public view returns(Flat[] memory){
+    return flats[owner];
+  }
+
+  function showSellRequests() public view returns(Sell[] memory){
+    return sellRequests;
+  }
+
+}
+
+
+// докинуть реквайры на владение квартирой в функции!
