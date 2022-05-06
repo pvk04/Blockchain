@@ -11,7 +11,7 @@ contract FlatSell {
     uint square;
     uint term;
     bool own;
-  } 
+  }
 
   struct Sell{
     address owner;
@@ -35,16 +35,17 @@ contract FlatSell {
   }
 
 
-  function addFlat (address owner, uint square) public{
+  function addFlat (address owner, uint square, uint term) public{
     require(msg.sender == admin, "You dont have permission");
     require(square != 0, "Flat square cant be 0");
-    flats[owner].push(Flat(square, block.timestamp, true));
+    flats[owner].push(Flat(square, term, true));
   }
 
   function addSellRequest(uint flatId, uint price) public{
     require(flats[msg.sender][flatId].own == true, "You no longer own this flat");
     require(flats[msg.sender].length > flatId, "Flat doesnt exist");
     require(price > 0, "Price must be greater than 0");
+    // статус продажи
     sellRequests.push(Sell(msg.sender, flatId, price, 0, block.timestamp, false,  address(0), address(0), false));
   }
 
