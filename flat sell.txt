@@ -2,7 +2,7 @@
 
 pragma solidity >=0.7.0 <0.9.0;
 
-contract flatSell {
+contract FlatSell {
 
   address admin;
   address owner1;
@@ -17,9 +17,11 @@ contract flatSell {
     address owner;
     uint flatId;
     uint price;
+    uint prevPrice; 
     uint sellTerm;
     bool sellStatus; // активно ли объявление
-    address buyer; // если есть покупатель, то другой человек не может кинуть запрос на покупку квартиры. Покупка будет по принципу кто первее кинет запрос.
+    address buyer; // текущий покупатель
+    address prevBuyer; // предыдущий покупатель, чью цену перебил 
     bool ownerConfirm; // какой ответ дан владельцем
   }
 
@@ -29,21 +31,21 @@ contract flatSell {
   constructor(){
     admin = msg.sender;
     owner1 = 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2;
-    flats[owner1].push(Flat(50, block.timestamp+36000, true));
+    flats[owner1].push(Flat(50, block.timestamp, true));
   }
 
 
   function addFlat (address owner, uint square) public{
     require(msg.sender == admin, "You dont have permission");
     require(square != 0, "Flat square cant be 0");
-    flats[owner].push(Flat(square, block.timestamp + 36000, true));
+    flats[owner].push(Flat(square, block.timestamp, true));
   }
 
   function addSellRequest(uint flatId, uint price) public{
     require(flats[msg.sender][flatId].own == true, "You no longer own this flat");
     require(flats[msg.sender].length > flatId, "Flat doesnt exist");
     require(price > 0, "Price must be greater than 0");
-    sellRequests.push(Sell(msg.sender, flatId, price, block.timestamp, false,  address(0), false));
+    sellRequests.push(Sell(msg.sender, flatId, price, 0, block.timestamp, false,  address(0), address(0), false));
   }
 
   function cancelSellRequest(uint requestId) public{
@@ -63,6 +65,25 @@ contract flatSell {
     sellRequests[flatId].buyer = msg.sender;
   }
 
+  function enterAuction (uint requestId, uint newPrice) public payable{
+    require(msg.sender != sellRequests[requestId].owner, "You cant buy your flat");  
+    require(sellRequests[requestId].sellStatus == false, "Flat already selled");
+    require(sellRequests[requestId].sellTerm <= block.timestamp, "This request has expired");
+    require(newPrice > sellRequests[requestId].price, "Enter a higher price than the current one");
+    require(sellRequests[requestId].buyer != address(0), "That request doesnt yet have a buyer");
+    require(sellRequests[requestId].buyer != msg.sender, "No one has beaten your price yet");
+    require(msg.value == newPrice, "You dont have enough money");
+    
+    // payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price);  деньги предыдущего будут храниться до того момента как его не перебьют 2 человека
+    if (sellRequests[requestId].prevBuyer != address(0)){
+      payable(sellRequests[requestId].prevBuyer).transfer(sellRequests[requestId].prevPrice); // 3 покупателю вернут деньги и он вообще выйдет из аукциона
+    }
+    sellRequests[requestId].prevBuyer = sellRequests[requestId].buyer;
+    sellRequests[requestId].prevPrice = sellRequests[requestId].price;
+    sellRequests[requestId].price = newPrice;
+    sellRequests[requestId].buyer = msg.sender;
+  }
+
   function ownerConfirm(uint requestId, bool confirmation) public{
     require(msg.sender == sellRequests[requestId].owner, "You dont own this flat");
     require(sellRequests[requestId].sellStatus == false, "Flat already selled");
@@ -71,20 +92,38 @@ contract flatSell {
     sellRequests[requestId].ownerConfirm = confirmation;
 
     if (sellRequests[requestId].sellTerm + 60 < block.timestamp || confirmation == false){
-        payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price); // если время действия объявления вышло и потом владелец соглашается, то сделка отмениться и деньги вернуться покупателю
+      payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price); // если время действия объявления вышло и потом владелец соглашается, то сделка отмениться и деньги вернуться покупателю
+      payable(sellRequests[requestId].prevBuyer).transfer(sellRequests[requestId].prevPrice); 
     }
     else{
         payable(sellRequests[requestId].owner).transfer(sellRequests[requestId].price);
-        // удалить у владельца квартиру и передать её покупателю
+        payable(sellRequests[requestId].prevBuyer).transfer(sellRequests[requestId].prevPrice); // возврат предыдущему покупателю
         address oldOwner = sellRequests[requestId].owner;
         address newOwner = sellRequests[requestId].buyer;
         uint square = flats[oldOwner][sellRequests[requestId].flatId].square;
         uint term =  flats[oldOwner][sellRequests[requestId].flatId].term;
         flats[newOwner].push(Flat(square, term, true));
-        // flats[sellRequests[requestId].buyer].push(Flat(flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].square, flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].term, true));
         flats[sellRequests[requestId].owner][sellRequests[requestId].flatId].own = false;  
         sellRequests[requestId].sellStatus = true;
     }
+  }
+
+  function buyerCancel(uint requestId) public{
+    require(sellRequests[requestId].buyer == msg.sender, "You not current buyer");
+    require(sellRequests[requestId].sellStatus == false, "Flat already selled");
+
+    payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price);
+    sellRequests[requestId].buyer = sellRequests[requestId].prevBuyer;
+    sellRequests[requestId].price = sellRequests[requestId].prevPrice;
+
+  }
+
+  function prevBuyerCancel(uint requestId) public{
+    require(sellRequests[requestId].prevBuyer == msg.sender, "You not previous buyer");
+    require(sellRequests[requestId].sellStatus == false, "Flat already selled");
+
+    payable(sellRequests[requestId].prevBuyer).transfer(sellRequests[requestId].prevPrice);
+    sellRequests[requestId].prevBuyer = address(0);
   }
 
   function showFlats(address owner) public view returns(Flat[] memory){
@@ -97,5 +136,3 @@ contract flatSell {
 
 }
 
-// что делать с term
-// сделать функцию возврата денег
