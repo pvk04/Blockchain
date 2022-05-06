@@ -115,7 +115,7 @@ contract FlatSell {
     payable(sellRequests[requestId].buyer).transfer(sellRequests[requestId].price);
     sellRequests[requestId].buyer = sellRequests[requestId].prevBuyer;
     sellRequests[requestId].price = sellRequests[requestId].prevPrice;
-
+    //нужны пустые адреса на предыдущего!
   }
 
   function prevBuyerCancel(uint requestId) public{
