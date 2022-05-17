@@ -164,7 +164,15 @@ contract FlatArenda is FlatSell{
         arendaRequests.push(flatArendaRequest(msg.sender, flatId, price, term, address(0), true, false, 0));
     }
     
-    //Функция отмены объявления
+    function cancelArendaRequest(uint reqId) public{
+        require(arendaRequests[reqId].owner == msg.sender, "Flat isnt yours");
+        require(arendaRequests[reqId].arendaStatus == true, "Ad is not active");
+        if (arendaRequests[reqId].status == true){
+            require(arendaRequests[reqId].startArenda + arendaRequests[reqId].term < block.timestamp);
+
+        }
+        arendaRequests[reqId].arendaStatus = false;
+    }
 
 
     //Функция проверки, не закончился ли срок аренды у арендатора, если закончился квартиру можно снять снова
@@ -180,7 +188,13 @@ contract FlatArenda is FlatSell{
         arendaRequests[reqId].renter = msg.sender;
     }
 
-    //Функция отмены брони
+    function cancelBook(uint reqId) public{
+        require(arendaRequests[reqId].status == false, "Flat already booked");
+        require(arendaRequests[reqId].renter == msg.sender, "You didn't book this");
+
+        payable(msg.sender).transfer(arendaRequests[reqId].price);
+        arendaRequests[reqId].renter = address(0);
+    }
 
     function bookFlatAccept(uint reqId) public{
         require(FlatSell.flats[arendaRequests[reqId].owner][arendaRequests[reqId].flatId].own == true, "This flat has been sold");
@@ -191,6 +205,15 @@ contract FlatArenda is FlatSell{
         payable(msg.sender).transfer(arendaRequests[reqId].price);
     }
 
+    function bookFlatReject(uint reqId) public{
+        require(arendaRequests[reqId].owner == msg.sender, "Flat isnt yours");
+        require(arendaRequests[reqId].arendaStatus == true, "Ad is not active");
+        require(arendaRequests[reqId].status == false, "Flat is already for rent.");
+
+        payable(arendaRequests[reqId].renter).transfer(arendaRequests[reqId].price);
+        arendaRequests[reqId].renter = address(0);
+    }
+
     function showAllArendaRequests() public view returns (flatArendaRequest[] memory){
         return arendaRequests;
     }
@@ -199,4 +222,11 @@ contract FlatArenda is FlatSell{
         return flats[owner][flatId];
     }
 
+}
+
+
+contract flatPresent is FlatSell{
+
+
+    
 }
