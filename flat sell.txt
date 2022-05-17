@@ -46,7 +46,7 @@ contract FlatSell {
     require(flats[msg.sender].length > flatId, "Flat doesnt exist");
     require(price > 0, "Price must be greater than 0");
     // статус продажи
-    sellRequests.push(Sell(msg.sender, flatId, price, 0, block.timestamp, false,  address(0), address(0), false));
+    sellRequests.push(Sell(msg.sender, flatId, price, price, block.timestamp, false,  address(0), address(0), false));
   }
 
   function cancelSellRequest(uint requestId) public{
@@ -117,6 +117,7 @@ contract FlatSell {
     sellRequests[requestId].buyer = sellRequests[requestId].prevBuyer;
     sellRequests[requestId].price = sellRequests[requestId].prevPrice;
     //нужны пустые адреса на предыдущего!
+    sellRequests[requestId].prevBuyer = address(0);
   }
 
   function prevBuyerCancel(uint requestId) public{
@@ -137,3 +138,65 @@ contract FlatSell {
 
 }
 
+
+contract FlatArenda is FlatSell{
+    struct flatArendaRequest{
+        address owner;
+        uint flatId;
+        uint price;
+        uint term;
+        address renter; //Арендатор
+        bool arendaStatus; //Активно ли объявление
+        bool status; //Снимает ли кто-то квартиру. Нужен ли аукцион? Если нет, то можно удалить переменную
+        uint startArenda; //Временная метка, с начала съема квартиры арендатором
+        // Сделать в функции запроса на аренду или отдельной ф. условие: если у пред. владельца закончился срок аренды, то квартиру опять можно снять
+        // либо нужно каждый раз добавлять новое объявление, если нужна история аренды
+    }
+
+    flatArendaRequest[] arendaRequests;
+
+    function addArendaRequest(uint flatId, uint price, uint term) public{
+        require(FlatSell.flats[msg.sender].length > flatId, "Flat doesn't exist");
+        require(FlatSell.flats[msg.sender][flatId].own == true, "You are no longer the owner");
+        require(price > 0, "Price must be greater than 0");
+        require(term > 0, "Term must be greater than 0");
+
+        arendaRequests.push(flatArendaRequest(msg.sender, flatId, price, term, address(0), true, false, 0));
+    }
+    
+    //Функция отмены объявления
+
+
+    //Функция проверки, не закончился ли срок аренды у арендатора, если закончился квартиру можно снять снова
+
+
+    function bookFlat(uint reqId) public payable{
+        require(FlatSell.flats[arendaRequests[reqId].owner][arendaRequests[reqId].flatId].own == true, "This flat has been sold");
+        require(arendaRequests[reqId].owner != msg.sender, "You cant rent your own flat");
+        require(arendaRequests[reqId].arendaStatus == true, "Ad is not active");
+        require(arendaRequests[reqId].status == false, "Flat already booked by someone");
+        require(msg.value == arendaRequests[reqId].price, "You dont have enough money");
+
+        arendaRequests[reqId].renter = msg.sender;
+    }
+
+    //Функция отмены брони
+
+    function bookFlatAccept(uint reqId) public{
+        require(FlatSell.flats[arendaRequests[reqId].owner][arendaRequests[reqId].flatId].own == true, "This flat has been sold");
+        require(arendaRequests[reqId].owner == msg.sender, "Flat isnt yours");
+        require(arendaRequests[reqId].arendaStatus == true, "Ad is not active");
+
+        arendaRequests[reqId].status = true;
+        payable(msg.sender).transfer(arendaRequests[reqId].price);
+    }
+
+    function showAllArendaRequests() public view returns (flatArendaRequest[] memory){
+        return arendaRequests;
+    }
+
+    function showFlatInfo(address owner, uint flatId) public view returns (Flat memory){
+        return flats[owner][flatId];
+    }
+
+}
