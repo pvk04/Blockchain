@@ -231,18 +231,19 @@ contract flatGift is FlatSell, FlatArenda{
         address reciever;
         address flatOwner;
         uint flatId;
+        uint giftTerm; // Срок за который должны принять подарок
         bool answer; // Согласился ли принять подарок получатель
         bool status; // активен ли запрос
     } 
     
     presentRequest[] presentRequests;
 
-    function presentFlat(uint flatId, address reciever) public{
+    function presentFlat(uint flatId, address reciever, uint time) public{
         require(FlatSell.flats[msg.sender].length > flatId, "Flat doesn't exist");
         require(FlatSell.flats[msg.sender][flatId].own == true, "This flat has been sold");
         require(msg.sender != reciever, "You can't give a gift to yourself");
         
-        presentRequests.push(presentRequest(reciever, msg.sender, flatId, false, false));
+        presentRequests.push(presentRequest(reciever, msg.sender, flatId, block.timestamp + time, false, false));
     }
 
     function cancelPresent(uint id) public{
@@ -255,7 +256,9 @@ contract flatGift is FlatSell, FlatArenda{
     function answerOnPresent(uint id, bool answer) public payable{
         require(FlatSell.flats[presentRequests[id].flatOwner][presentRequests[id].flatId].own == true, "This flat has been sold");
         require(presentRequests[id].status == false, "Request not active");
+        require(presentRequests[id].giftTerm > block.timestamp, "Request term is over");
         require(msg.sender == presentRequests[id].reciever, "Its not your request");
+
 
         presentRequests[id].status = true;
         presentRequests[id].answer = answer;
