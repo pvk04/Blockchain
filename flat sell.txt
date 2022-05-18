@@ -11,7 +11,7 @@ contract FlatSell {
     uint square;
     uint term;
     bool own;
-  }
+  } // Сделать зависимость от аренды и подарка?
 
   struct Sell{
     address owner;
@@ -225,8 +225,46 @@ contract FlatArenda is FlatSell{
 }
 
 
-contract flatPresent is FlatSell{
+contract flatGift is FlatSell, FlatArenda{
 
-
+    struct presentRequest{
+        address reciever;
+        address flatOwner;
+        uint flatId;
+        bool answer; // Согласился ли принять подарок получатель
+        bool status; // активен ли запрос
+    } 
     
+    presentRequest[] presentRequests;
+
+    function presentFlat(uint flatId, address reciever) public{
+        require(FlatSell.flats[msg.sender].length > flatId, "Flat doesn't exist");
+        require(FlatSell.flats[msg.sender][flatId].own == true, "This flat has been sold");
+        require(msg.sender != reciever, "You can't give a gift to yourself");
+        
+        presentRequests.push(presentRequest(reciever, msg.sender, flatId, false, false));
+    }
+
+    function cancelPresent(uint id) public{
+        require(presentRequests[id].flatOwner == msg.sender, "This is not your request");
+        require(presentRequests[id].status == false, "Request not active");
+
+        presentRequests[id].status = true;
+    }
+
+    function answerOnPresent(uint id, bool answer) public payable{
+        require(FlatSell.flats[presentRequests[id].flatOwner][presentRequests[id].flatId].own == true, "This flat has been sold");
+        require(presentRequests[id].status == false, "Request not active");
+        require(msg.sender == presentRequests[id].reciever, "Its not your request");
+
+        presentRequests[id].status = true;
+        presentRequests[id].answer = answer;
+
+        if (answer == true){
+            FlatSell.flats[presentRequests[id].flatOwner][presentRequests[id].flatId].own = false;
+            uint square = flats[presentRequests[id].flatOwner][presentRequests[id].flatId].square;
+            uint term = flats[presentRequests[id].flatOwner][presentRequests[id].flatId].term;
+            FlatSell.flats[presentRequests[id].reciever].push(Flat(square, term, true));
+        }
+    }
 }
